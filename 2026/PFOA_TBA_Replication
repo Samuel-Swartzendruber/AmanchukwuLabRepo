@@ -1,0 +1,48 @@
+#%%
+#Create ISE calibration curve for Li in PFOA degradation replication experiment
+
+import numpy as np
+import matplotlib
+
+import matplotlib.pyplot as plt
+
+# Sample data for Li concentration (in ppm) and corresponding voltage (in mV)
+Fminus_concentration_Li = np.array([100, 150, 200, 250, 300])  # Li concentration in ppm
+voltage_Li = np.array([82.1,
+71.3,
+66,
+58.8,
+54.4])  # Corresponding voltage in mV
+
+#Do log fit of concentration
+m, b = np.polyfit(np.log(Fminus_concentration_Li), voltage_Li, 1)
+# Create the calibration curve
+plt.figure(figsize=(8, 6))
+plt.scatter(np.log(Fminus_concentration_Li), voltage_Li, marker='o',  color='b')
+plt.plot(np.log(Fminus_concentration_Li), m * np.log(Fminus_concentration_Li) + b, color='r', linestyle='--', label=f'Fit: y={m:.2f}ln(x)+{b:.2f}')
+plt.title('ISE Calibration Curve: Lithium', fontsize=18)
+plt.xlabel('log(F- Concentration (ppm))', fontsize=18)
+plt.ylabel('Voltage (mV)', fontsize=18)
+plt.grid()
+plt.show()
+
+
+#Create ISE calibration curve for TBA in PFOA degradation replication experiment
+
+Fminus_concentration_TBA = np.array([100, 150, 200, 250, 300])  # TBA concentration in ppm
+voltage_TBA = np.array([78.5,
+68.6,
+61.1,
+54.5,
+50.4])  # Corresponding voltage in mV
+
+m, b = np.polyfit(np.log(Fminus_concentration_TBA), voltage_TBA, 1)
+# Create the calibration curve
+plt.figure(figsize=(8, 6))
+plt.scatter(np.log(Fminus_concentration_TBA), voltage_TBA, marker='o',  color='b')
+plt.plot(np.log(Fminus_concentration_TBA), m * np.log(Fminus_concentration_TBA) + b, color='r', linestyle='--', label=f'Fit: y={m:.2f}ln(x)+{b:.2f}')
+plt.title('ISE Calibration Curve: TBA', fontsize=18)
+plt.xlabel('log(F- Concentration (ppm))', fontsize=18)
+plt.ylabel('Voltage (mV)', fontsize=18)
+plt.grid()
+plt.show()
