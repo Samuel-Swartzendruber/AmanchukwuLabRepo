@@ -1,0 +1,50 @@
+#%%
+# PFAS Degradation% Comparison Chart
+import matplotlib.pyplot as plt
+# Sample data for PFAS degradation percentages for different methods
+methods = ['Plasma spinning disk reactor', 'Plasma + CTAB surfactant', 'UV-activated sulfite', 'Sodium dispersion', 'Hydrothermal Alkaline Treatment' 'HT Supercritical H2O Oxidation', 'Naphthalenide (preliminary)']
+degradation_percentages = [100, 67, 99.9, 0, 100, 100]
+defluorination_percentages = [67, 43, 100, 97, 100.0, 0]
+
+
+#Use the following color scheme
+
+blue = (0, 0.576, 0.902) # 0, 147, 230
+green = (0.349,0.745,0.306) # 89, 190, 78
+red = (0.984, 0.262, 0.219) # 251, 67, 56 
+orange = (0.984, 0.713, 0.305) # 251, 182, 78 
+purple = (0.839, 0.286, 0.604) # 214, 73, 1541
+anvil = (0.298, 0.78, 0.77) # 76, 199, 196
+dark_purple = (0.557, 0, 0.998) # 142, 0, 252
+pink = (0.95, 0.78, 0.996) # 242, 199, 154
+gray = (0.463,0.463,0.463) # 118, 118, 118
+light_purple = (0.7411764705882353, 0.5019607843137255, 0.9764705882352941)
+
+
+
+# Create the dual bar chart with both degradation and defluorination percentages
+x = range(len(methods))
+width = 0.35
+plt.figure(figsize=(10, 6))
+plt.bar(x, degradation_percentages, width=width, color=orange, label='Degradation (%)')
+plt.bar([i + width for i in x], defluorination_percentages, width=width, color=anvil, label='Defluorination (%)')
+#make text boxes for each tick label and wrap them if they are too long
+for i, (deg, deflu) in enumerate(zip(degradation_percentages, defluorination_percentages)):
+    plt.text(i, deg + 2, f'{deg:.1f}%', ha='center', va='bottom')
+    plt.text(i + width, deflu + 2, f'{deflu:.1f}%', ha='center', va='bottom')
+#for plt.xticks, wrap the text if it is too long and don't rotate it if it is not too long, but rotate it if it is too long
+plt.xticks([i + width / 2 for i in x], methods, rotation=45, ha='right', wrap=True, fontsize=18)
+plt.title('Comparison of PFBS Degradation and Defluorination Percentages', fontsize=18)
+plt.xlabel('Method', fontsize=18)
+plt.ylabel('Percentage (%)', fontsize=18)
+
+#make arial font
+plt.rcParams['font.family'] = 'Arial'
+
+plt.ylim(0, 110)
+plt.legend()
+plt.grid(axis='y')
+plt.tight_layout()
+plt.show()  
+
+
