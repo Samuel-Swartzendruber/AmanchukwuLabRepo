@@ -1,0 +1,65 @@
+#%%
+#Begin by setting up an interactive EPR calculator for making the naphthalenide ion
+#First, we need to import the necessary libraries
+import numpy as np
+import matplotlib.pyplot as plt
+#Next, we need to define the parameters for our EPR calculation
+g_factor = 2.0023  # g-factor for the naphthalenide ion
+B0 = 0.34  # Magnetic field strength in Tesla (can be adjusted))
+
+#Now we can calculate the resonance frequency using the formula: f = g * mu_B * B0 / h
+mu_B = 9.274009994e-24  # Bohr magneton in J/T
+h = 6.62607015e-34  # Planck's constant
+resonance_frequency = g_factor * mu_B * B0 / h
+print(f"Resonance frequency for naphthalenide ion: {resonance_frequency:.2e} Hz")
+#Next, we can set up a range of magnetic field strengths to see how the resonance frequency changes
+B_values = np.linspace(0.1, 1.0, 10)
+frequencies = g_factor * mu_B * B_values / h
+#Now we can plot the resonance frequency as a function of the magnetic field strength
+plt.figure(figsize=(10, 6))
+plt.plot(B_values, frequencies, marker='o')
+plt.title('Resonance Frequency vs Magnetic Field Strength for Naphthalenide Ion')
+plt.xlabel('Magnetic Field Strength (T)')
+plt.ylabel('Resonance Frequency (Hz)')
+plt.grid()
+plt.show()
+
+
+#Now I would like to calculate the EPR spectrum for the naphthalenide ion, which involves considering the hyperfine interactions with the nuclei. For simplicity, we will assume a single hyperfine interaction with a nucleus that has a spin of 1/2 and a hyperfine coupling constant A.
+A = 100e-6  # Hyperfine coupling constant in Tesla (can be adjusted)
+#The EPR spectrum will consist of two lines due to the hyperfine splitting, which can be calculated as follows:
+line1 = resonance_frequency + A / 2
+line2 = resonance_frequency - A / 2
+print(f"Line 1 frequency: {line1:.2e} Hz")
+print(f"Line 2 frequency: {line2:.2e} Hz")
+#Finally, we can plot the EPR spectrum, showing the two lines corresponding to the hyperfine splitting
+plt.figure(figsize=(10, 6))
+plt.axvline(line1, color='r', linestyle='--', label='Line 1')
+plt.axvline(line2, color='b', linestyle='--', label='Line 2')
+plt.title('EPR Spectrum for Naphthalenide Ion with Hyperfine Interaction')
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Intensity (a.u.)')
+plt.legend()
+plt.grid()
+plt.show()
+
+
+
+#Now I want to simulate an EPR spectrum as I would get it from the machine
+
+#To simulate the EPR spectrum, we can use a Gaussian function to represent the line shape of the EPR signal. We will create a range of frequencies around the resonance frequency and calculate the intensity of the EPR signal at each frequency.
+def gaussian(x, mu, sigma):
+    return np.exp(-0.5 * ((x - mu) / sigma) ** 2)
+# Define the frequency range for the simulation
+frequency_range = np.linspace(resonance_frequency - 5e9, resonance_frequency + 5e9, 1000)
+# Calculate the intensity of the EPR signal for each frequency
+sigma = 1e9  # Line width (can be adjusted)
+intensity = gaussian(frequency_range, line1, sigma) + gaussian(frequency_range, line2, sigma)
+# Plot the simulated EPR spectrum
+plt.figure(figsize=(10, 6))
+plt.plot(frequency_range, intensity, color='m')
+plt.title('Simulated EPR Spectrum for Naphthalenide Ion')
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Intensity (a.u.)')
+plt.grid()
+plt.show()  

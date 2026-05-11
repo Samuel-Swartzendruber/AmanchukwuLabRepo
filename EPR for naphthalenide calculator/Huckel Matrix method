@@ -1,0 +1,63 @@
+
+#%%
+#I would like to make a script that follows the following steps:
+# Sets up the Hückel matrix for naphthalene
+# Finds the LUMO and computes spin densities
+# Computes HFCs via McConnell
+# Simulates the EPR spectrum
+# Shows an interactive matplotlib window with sliders
+
+#Set up the Hückel matrix for naphthalene
+import numpy as np
+# Define the Hückel matrix for naphthalene (10 carbon atoms)
+H = np.array([[0, -1, 0, 0, 0, 0, 0, 0, 0, 0],
+              [-1, 0, -1, 0, 0, 0, 0, 0, 0, 0],
+              [0, -1, 0, -1, 0, 0, 0, 0, 0, 0],
+              [0, 0, -1, 0, -1, 0, 0, 0, 0, 0],
+              [0, 0, 0, -1, 0, -1, 0, 0, 0, 0], 
+              [0, 0, 0, 0, -1, 0, -1, 0, 0, 0],
+              [0, 0, 0, 0, 0, -1, 0, -1, 0, 0],
+              [0, 0, 0, 0, 0, 0, -1, 0, -1, 0],
+              [0, 0, 0, 0, 0, 0, 0, -1, 0, -1],
+              [0, 0, 0, 0, 0, 0, 0, 0, -1, 0]])
+# Find the eigenvalues and eigenvectors of the Hückel matrix
+eigenvalues, eigenvectors = np.linalg.eig(H)
+# Sort the eigenvalues and corresponding eigenvectors
+idx = eigenvalues.argsort()
+eigenvalues = eigenvalues[idx]
+eigenvectors = eigenvectors[:, idx]
+# The LUMO is the highest occupied molecular orbital, which corresponds to the eigenvector with the highest eigenvalue
+LUMO = eigenvectors[:, -1]
+# Compute the spin densities using the LUMO
+spin_densities = LUMO ** 2
+print("Spin densities at each carbon atom:", spin_densities)
+
+#Now compute the hyperfine coupling constants (HFCs) using McConnell's relation, which states that the HFC is proportional to the spin density at the nucleus. We will assume a proportionality constant of 100 MHz for simplicity.
+proportionality_constant = 100e6  # in Hz
+HFCs = proportionality_constant * spin_densities
+print("Hyperfine coupling constants (HFCs) at each carbon atom (in Hz):", HFCs)
+
+#Now we can simulate the EPR spectrum based on the computed HFCs. The EPR spectrum will consist of lines corresponding to the hyperfine splitting, which can be calculated as follows:
+resonance_frequency = 9.5e9  # Resonance frequency in Hz (can be adjusted)
+line_frequencies = [resonance_frequency + HFC for HFC in HFCs] + [resonance_frequency - HFC for HFC in HFCs]
+print("Line frequencies for the EPR spectrum (in Hz):", line_frequencies)  
+
+#Finally, we can plot the simulated EPR spectrum, showing the lines corresponding to the hyperfine splitting. We will use a Gaussian function to represent the line shape of the EPR signal.
+import matplotlib.pyplot as plt
+def gaussian(x, mu, sigma):
+    return np.exp(-0.5 * ((x - mu) / sigma) ** 2)
+# Define the frequency range for the simulation
+frequency_range = np.linspace(resonance_frequency - 5e9, resonance_frequency + 5e9, 1000)
+# Calculate the intensity of the EPR signal for each frequency
+sigma = 1e9  # Line width (can be adjusted)
+intensity = np.zeros_like(frequency_range)
+for line in line_frequencies:
+    intensity += gaussian(frequency_range, line, sigma)
+# Plot the simulated EPR spectrum
+plt.figure(figsize=(10, 6))
+plt.plot(frequency_range, intensity, color='m')
+plt.title('Simulated EPR Spectrum for Naphthalenide Ion')
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Intensity (a.u.)')
+plt.grid()
+plt.show()  
