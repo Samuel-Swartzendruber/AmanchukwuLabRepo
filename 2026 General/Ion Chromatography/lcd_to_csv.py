@@ -1,184 +1,160 @@
-#%%
-# ─────────────────────────────────────────────────────────────────────────────
-# Shimadzu .lcd → CSV  |  Interactive Widget  (VS Code Interactive Window)
-#
-# Requirements:
-#   pip install rainbow-api pandas ipywidgets matplotlib
-#
-# Run this cell (Shift+Enter) — a GUI panel will appear below.
-# ─────────────────────────────────────────────────────────────────────────────
+"""
+Batch converter: Shimadzu .lcd -> CSV (retention time vs intensity)
 
-from __future__ import annotations
-import io
+LCD files are Microsoft OLE compound documents. The chromatogram traces
+live in streams named "LSS Raw Data" / "Chromatogram Ch<N>", encoded with
+a delta-compression scheme. This script reads those streams directly with
+`olefile` (no proprietary software required).
+
+Usage:
+    python lcd_to_csv.py <input_dir> [output_dir]
+
+    input_dir:  folder containing .lcd files (searched recursively)
+    output_dir: where to write CSVs (default: same folder as each .lcd file)
+
+Requirements:
+    pip install olefile pandas
+"""
+
+import sys
+import struct
+import argparse
 from pathlib import Path
 
 try:
-    import rainbow as rb
+    import olefile
 except ImportError:
-    raise ImportError("Run:  pip install rainbow-api")
+    sys.exit("Missing dependency. Run:  pip install olefile")
 
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import ipywidgets as widgets
-from IPython.display import display, clear_output
 
-# ── helpers ──────────────────────────────────────────────────────────────────
 
-def find_lcd_files(folder: Path) -> list[Path]:
-    return sorted(folder.rglob("*.lcd"))
+def _decode_value(raw_bytes: bytes) -> int:
+    """Decode a Shimadzu delta-encoded value. The leading nibble is a sign
+    digit: even = positive, odd = two's-complement negative."""
+    total_bits = 8 * len(raw_bytes)
+    x = 0
+    for b in raw_bytes:
+        x = (x << 8) | b
 
-def convert_lcd(lcd_path: Path, output_dir: Path) -> list[tuple[Path, pd.DataFrame]]:
-    """Return list of (csv_path, dataframe) for every channel in the file."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    datafile = rb.read(str(lcd_path))
-    results = []
+    value_bits = total_bits - 4
+    sign = (x >> value_bits) & 0xF
+    value_mask = (1 << value_bits) - 1
+    value = x & value_mask
 
-    for detector in datafile.detectors:
-        for channel in detector.channels:
-            times = channel.times
-            data  = channel.data
-            df = pd.DataFrame({"time_min": times, "intensity": data})
+    if sign % 2 == 1:
+        return -((1 << value_bits) - value)
+    return value
 
-            label    = (channel.name or "channel").replace("/", "-").replace(" ", "_")
-            out_path = output_dir / f"{lcd_path.stem}_{label}.csv"
+
+def _decode_chromatogram_stream(buf: bytes) -> tuple[np.ndarray, float]:
+    """Decode a 'Chromatogram Ch<N>' stream into (intensities, interval_ms)."""
+    pos = 24  # 24-byte header (see module docstring)
+    n_lambda = struct.unpack_from("<H", buf, 8)[0]      # number of points
+    interval_ms = struct.unpack_from("<i", buf, 4)[0]   # sampling interval (ms)
+
+    signal = np.zeros(n_lambda)
+    count = 0
+    acc = 0
+
+    while count < n_lambda - 1 and pos + 2 <= len(buf):
+        n_bytes = struct.unpack_from("<H", buf, pos)[0]
+        pos += 2
+        end_pos = pos + n_bytes
+
+        while pos < end_pos:
+            cb = buf[pos]
+            if cb == 0x82:
+                pos += 1
+                continue
+            elif cb == 0x00:
+                delta = 0
+                pos += 1
+            else:
+                hex1 = cb >> 4
+                if hex1 == 0:
+                    delta = cb
+                    pos += 1
+                elif hex1 == 1:
+                    delta = _decode_value(buf[pos:pos + 1])
+                    pos += 1
+                else:
+                    extra = hex1 // 2
+                    delta = _decode_value(buf[pos:pos + 1 + extra])
+                    pos += 1 + extra
+
+            acc += delta
+            signal[count] = acc
+            count += 1
+            if count >= n_lambda - 1:
+                break
+
+        pos = end_pos
+        pos += 2  # end-of-segment marker
+        acc = 0
+
+    return signal, interval_ms
+
+
+def convert_lcd(lcd_path: Path, output_dir: Path | None) -> list[Path]:
+    """Convert one .lcd file to one CSV per chromatogram channel."""
+    out_dir = output_dir or lcd_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+
+    with olefile.OleFileIO(str(lcd_path)) as ole:
+        streams = ole.listdir()
+        chrom_streams = sorted(
+            s for s in streams
+            if len(s) == 2 and s[0] == "LSS Raw Data" and s[1].startswith("Chromatogram Ch")
+        )
+
+        for stream in chrom_streams:
+            buf = ole.openstream(stream).read()
+            if len(buf) < 24:
+                continue  # empty/unused channel
+
+            signal, interval_ms = _decode_chromatogram_stream(buf)
+
+            times = np.arange(len(signal)) * interval_ms / 60000.0  # ms -> min
+            df = pd.DataFrame({"time_min": times, "intensity": signal})
+
+            label = stream[1].replace(" ", "_")  # e.g. Chromatogram_Ch1
+            out_path = out_dir / f"{lcd_path.stem}_{label}.csv"
             df.to_csv(out_path, index=False)
-            results.append((out_path, df))
+            written.append(out_path)
 
-    return results
+    return written
 
-# ── widget layout ─────────────────────────────────────────────────────────────
 
-style   = {"description_width": "130px"}
-layout  = widgets.Layout(width="480px")
-btn_lay = widgets.Layout(width="160px", height="34px")
+def main():
+    
+    
+    parser = argparse.ArgumentParser(description="Batch Shimadzu .lcd -> CSV converter")
+    parser.add_argument("input_dir", type=Path, help="Folder with .lcd files (recursive)")
+    parser.add_argument("output_dir", type=Path, nargs="?", default=None,
+                        help="Output folder for CSVs (default: alongside each .lcd)")
+    args = parser.parse_args()
 
-# ── input folder ──
-w_input = widgets.Text(
-    description="📂 LCD folder:",
-    placeholder="Paste or type folder path…",
-    style=style, layout=layout,
-)
+    lcd_files = sorted(args.input_dir.rglob("*.lcd"))
+    if not lcd_files:
+        sys.exit(f"No .lcd files found under {args.input_dir}")
 
-# ── output folder ──
-w_output = widgets.Text(
-    description="💾 Output folder:",
-    placeholder="Leave blank → same as input",
-    style=style, layout=layout,
-)
+    print(f"Found {len(lcd_files)} .lcd file(s)\n")
+    total = 0
+    for lcd in lcd_files:
+        print(f"{lcd.relative_to(args.input_dir)}")
+        try:
+            written = convert_lcd(lcd, args.output_dir)
+            for w in written:
+                print(f"  wrote {w.name}")
+            total += len(written)
+        except Exception as e:
+            print(f"  ERROR: {e}")
 
-# ── file list ──
-w_filelist = widgets.SelectMultiple(
-    description="LCD files:",
-    options=[],
-    rows=8,
-    style=style,
-    layout=widgets.Layout(width="480px"),
-)
+    print(f"\nDone — {total} CSV file(s) written.")
 
-# ── buttons ──
-btn_scan    = widgets.Button(description="🔍 Scan folder",  button_style="info",    layout=btn_lay)
-btn_convert = widgets.Button(description="⚙ Convert",       button_style="success", layout=btn_lay)
-btn_clear   = widgets.Button(description="✖ Clear log",     button_style="warning", layout=btn_lay)
 
-# ── preview toggle ──
-w_preview = widgets.Checkbox(value=True, description="Show chromatogram preview", indent=False)
-
-# ── log output ──
-out_log  = widgets.Output(layout=widgets.Layout(
-    border="1px solid #ccc", min_height="80px", max_height="200px",
-    overflow_y="auto", padding="6px", width="480px",
-))
-# ── plot output ──
-out_plot = widgets.Output()
-
-# ── state ──
-_lcd_files: list[Path] = []
-
-# ── callbacks ─────────────────────────────────────────────────────────────────
-
-def on_scan(_):
-    global _lcd_files
-    folder = Path(w_input.value.strip())
-    with out_log:
-        if not folder.exists():
-            print(f"❌  Folder not found: {folder}")
-            return
-        _lcd_files = find_lcd_files(folder)
-        w_filelist.options = [str(p.relative_to(folder)) for p in _lcd_files]
-        print(f"✅  Found {len(_lcd_files)} .lcd file(s) in {folder}")
-
-def on_convert(_):
-    if not _lcd_files:
-        with out_log:
-            print("⚠️  Scan a folder first.")
-        return
-
-    # Which files to convert — all if nothing selected, else selection
-    selected_indices = list(w_filelist.index) or list(range(len(_lcd_files)))
-    files_to_run = [_lcd_files[i] for i in selected_indices]
-
-    in_folder  = Path(w_input.value.strip())
-    raw_out    = w_output.value.strip()
-    out_folder = Path(raw_out) if raw_out else in_folder
-
-    all_results: list[tuple[Path, pd.DataFrame]] = []
-    with out_log:
-        for lcd in files_to_run:
-            try:
-                results = convert_lcd(lcd, out_folder)
-                for csv_path, _ in results:
-                    print(f"  ✅  {csv_path.name}")
-                all_results.extend(results)
-            except Exception as e:
-                print(f"  ❌  {lcd.name}: {e}")
-        print(f"\n🏁  Done — {len(all_results)} CSV(s) written to {out_folder}\n")
-
-    if w_preview.value and all_results:
-        _plot_previews(all_results)
-
-def on_clear(_):
-    out_log.clear_output()
-    out_plot.clear_output()
-
-def _plot_previews(results: list[tuple[Path, pd.DataFrame]]):
-    with out_plot:
-        clear_output(wait=True)
-        n = len(results)
-        cols = min(n, 3)
-        rows = (n + cols - 1) // cols
-        fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 3 * rows), squeeze=False)
-        axes_flat = [ax for row in axes for ax in row]
-
-        for ax, (csv_path, df) in zip(axes_flat, results):
-            ax.plot(df["time_min"], df["intensity"], lw=1, color="#2176ae")
-            ax.set_title(csv_path.stem, fontsize=9, pad=4)
-            ax.set_xlabel("Time (min)", fontsize=8)
-            ax.set_ylabel("Intensity", fontsize=8)
-            ax.tick_params(labelsize=7)
-
-        # Hide unused axes
-        for ax in axes_flat[n:]:
-            ax.set_visible(False)
-
-        fig.tight_layout()
-        plt.show()
-
-# ── wire up ──
-btn_scan.on_click(on_scan)
-btn_convert.on_click(on_convert)
-btn_clear.on_click(on_clear)
-
-# ── render ────────────────────────────────────────────────────────────────────
-
-panel = widgets.VBox([
-    widgets.HTML("<h3 style='margin:0 0 8px'>🧪 Shimadzu LCD → CSV Converter</h3>"),
-    w_input,
-    w_output,
-    widgets.HBox([btn_scan, btn_convert, btn_clear]),
-    w_filelist,
-    w_preview,
-    out_log,
-    out_plot,
-], layout=widgets.Layout(padding="12px", width="520px"))
-
-display(panel)
+if __name__ == "__main__":
+    main()

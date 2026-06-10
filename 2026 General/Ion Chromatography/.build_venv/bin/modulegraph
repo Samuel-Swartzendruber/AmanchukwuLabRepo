@@ -1,0 +1,10 @@
+#!/bin/sh
+'''exec' "/Users/sdruber/Library/CloudStorage/Box-Box/Amanchukwu Lab Shared Box Folder/1. Lab Members/1. Grad Students/16. Samuel S./AmanchukwuLabRepo/2026 General/Ion Chromatography/.build_venv/bin/python3.12" "$0" "$@"
+' '''
+# -*- coding: utf-8 -*-
+import re
+import sys
+from modulegraph.__main__ import main
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.exit(main())
