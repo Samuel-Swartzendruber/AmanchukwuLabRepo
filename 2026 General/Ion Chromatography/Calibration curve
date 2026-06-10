@@ -1,0 +1,27 @@
+#The first step is to be able to separate out the data from the rest of the text file
+
+#%%
+# Calibration Curve for Ion Chromatography
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+
+#create place to load data from text file
+data_file = '/Users/sdruber/Library/CloudStorage/Box-Box/Amanchukwu Lab Shared Box Folder/1. Lab Members/1. Grad Students/16. Samuel S./Data transfer/IC Dat/300ppmF-calib.txt'
+
+data = np.genfromtxt(data_file, delimiter='\t', skip_header=92)
+
+time = data[:, 0]
+signal = data[:, 1]
+
+plt.plot(time, signal)
+plt.xlabel("Time")
+plt.ylabel("Signal")
+plt.title("400 ppm F- Calibration")
+plt.show()
+
+#get area of peak between time 7.8 and 11
+peak_area = np.trapz(signal[(time >= 7.8) & (time <= 11)], time[(time >= 7.8) & (time <= 11)])
+print(f"Peak area: {peak_area}")
+
